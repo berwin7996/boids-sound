@@ -1,42 +1,60 @@
 112 => float bpm;
 (60000 / (4 * bpm))::ms => dur time16;
 0 => int beat;
+0 => int meas;
+
+0.5 => dac.gain;
 
 [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] @=> float hatNotes[];
-[0.4, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2] @=> float hatWeights[];
 [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0] @=> float bdNotes[];
-[0.4, 0.0, 0.3, 0.0, 0.4, 0.0, 0.3, 0.0, 0.4, 0.0, 0.3, 0.0, 0.4, 0.0, 0.3, 0.0] @=> float bdWeights[];
 [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0] @=> float snNotes[];
-[0.0, 0.2, 0.3, 0.2, 0.6, 0.2, 0.4, 0.4, 0.0, 0.2, 0.3, 0.2, 0.6, 0.2, 0.0, 0.0] @=> float snWeights[];
 [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] @=> float tomNotes[];
-[0.4, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2] @=> float tomWeights[];
+
+0 => int snareFillFlag;
 
 OscRecv recv;
 6449 => recv.port;
 recv.listen();
-recv.event("/note/length/distance", "i i i") @=> OscEvent @ oe;
+recv.event("/note/length/distance", "i i i") @=> OscEvent @ mele;
+recv.event("/drum", "i") @=> OscEvent @ drume;
  
 256 => int queueSize;
 0 => int queueStart;
 0 => int queueEnd;
 int queue[3][queueSize];
 
-fun void oscr(){
+TriOsc t[4];
+for(0 => int i; i < 4; i++){
+    t[i] => dac;
+    0.4 => t[i].gain;
+}
+
+fun void melodyRecieve(){
     while(true){
-        oe => now;
-        while(oe.nextMsg()){
-            oe.getInt() => queue[0][queueEnd];
-            oe.getInt() => queue[1][queueEnd];
-            oe.getInt() => queue[2][queueEnd];
+        mele => now;
+        while(mele.nextMsg()){
+            mele.getInt() => queue[0][queueEnd];
+            mele.getInt() => queue[1][queueEnd];
+            mele.getInt() => queue[2][queueEnd];
             (queueEnd + 1) % queueSize => queueEnd;
         }
     }
 }
 
+fun void drumRecieve(){
+    while(true){
+        drume => now;
+        while(drume.nextMsg()){
+            changeDrums(drume.getInt());
+        }
+    }
+}
+
 fun void hat(float vel){
-    Noise n => HPF hi => dac;
-    6000 => hi.freq;
+    Noise n => HPF hi => LPF lo => dac;
+    8000 => hi.freq;
     3 => hi.Q;
+    18000 => lo.freq;
     for(0 => int i; i < 25; i++){
         (25 - i) $ float / 25 * vel => n.gain;
         1::ms => now;
@@ -56,12 +74,23 @@ fun void bd(float vel){
 
 fun void sn(float vel){
     Noise n => LPF f => dac;
-    1.5 => f.Q;
-    for(0 => int i; i < 50; i++){
+    2 => f.Q;
+    for(0 => int i; i < 60; i++){
         1000 * Math.exp(-0.1 * i) + 3000 => f.freq;
-        (50 - i) $ float / 50 * vel => n.gain;
+        (60 - i) $ float / 60 * vel => n.gain;
         2::ms => now;
     }
+}
+
+fun void cymb(){
+    Noise n => HPF hi => dac;
+    6000 => hi.freq;
+    3 => hi.Q;
+    for(0 => int i; i < 25; i++){
+        (25 - i) $ float / 25 => n.gain;
+        20::ms => now;
+    }
+    0 => n.gain;
 }
 
 fun void melody(int note, int vel){
@@ -73,28 +102,112 @@ fun void melody(int note, int vel){
     }
 }
 
-fun void beat16(){
-    spork ~ hat(hatNotes[beat] * hatWeights[beat]);
-    spork ~ bd(bdNotes[beat] * bdWeights[beat]);
-    spork ~ sn(snNotes[beat] * snWeights[beat]);
-    beat++;
-    if(beat == 16){
-        0 => beat;
-        Math.random2(0, 2) => int instChange;
-        Math.random2(0, 15) => int beatIndex;
-        if(instChange == 0){
-            Math.random2(0, 2) $ float / 2 => hatNotes[beatIndex];
-        }
-        else if(instChange == 1){
-            Math.random2(0, 2) $ float / 2 => bdNotes[beatIndex];
-        }
-        else if(instChange == 2){
-            Math.random2(0, 2) $ float / 2 => snNotes[beatIndex];
-        }
+fun void changeChords(){
+    if(meas % 4 == 1){
+        Std.mtof(53) => t[0].freq;
+        Std.mtof(60) => t[1].freq;
+        Std.mtof(65) => t[2].freq;
+        Std.mtof(72) => t[3].freq; 
+    }
+    else if(meas % 4 == 2){
+        Std.mtof(55) => t[0].freq;
+        Std.mtof(62) => t[1].freq;
+        Std.mtof(67) => t[2].freq;
+        Std.mtof(74) => t[3].freq;
+    }
+    else{
+        Std.mtof(57) => t[0].freq;
+        Std.mtof(64) => t[1].freq;
+        Std.mtof(69) => t[2].freq;
+        Std.mtof(76) => t[3].freq;
     }
 }
 
-spork ~ oscr();
+fun void changeDrums(int param){
+    Math.random2(0, 4) => int instChange;
+    if(instChange == 0){
+        [2, 3, 4, 6, 8] @=> int patLengths[];
+        patLengths[Math.random2(0, 4)] => int hatPatLength;
+        for(0 => int i; i < hatPatLength; i++){
+            Math.randomf() => hatNotes[i];
+            if(hatNotes[i] < 0.4){
+                0 => hatNotes[i];
+            }
+        }
+        for(hatPatLength => int i; i < 16; i++){
+            hatNotes[i % hatPatLength] => hatNotes[i];
+        }
+    }
+    else if(instChange == 1){
+        [[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+         [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+         [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0],
+         [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0],
+         [1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1],
+         [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0],
+         [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0],
+         [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1],
+         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] @=> int bdPats[][];
+        Math.random2(0, 8) => int bdPatNum;
+        for(0 => int i; i < 16; i++){
+            bdPats[bdPatNum][i] => bdNotes[i];
+        }
+    }
+    else if(instChange == 2){
+        if(snareFillFlag == 0){
+            Math.random2(0, 1) => snareFillFlag;
+        }
+    }
+    else if(instChange == 3){
+        Math.max(Math.min(bpm + Math.random2(-2, 2), 132), 88) => bpm;
+        <<<bpm>>>;
+        (60000 / (4 * bpm))::ms => time16;
+    }
+}
+
+fun void beat16(){
+    spork ~ hat(hatNotes[beat]);
+    spork ~ bd(bdNotes[beat]);
+    spork ~ sn(snNotes[beat]);
+    if(beat == 0){
+        changeChords();
+        if(snareFillFlag == 3){
+            0 => snareFillFlag;
+            spork ~ cymb();
+        }
+    }
+    if(beat % 2 == 0){
+        12::ms => now;
+    }
+    beat++;
+    if(beat == 16){
+        0 => beat;
+        meas++;
+        if(meas == 16){
+            0 => meas;
+        }
+        if(snareFillFlag == 1 && (meas % 4) == 3){
+            for(0 => int i; i < 16; i++){
+                Math.min(Math.randomf() + 0.3, 1) => snNotes[i];
+                if(snNotes[i] < 0.6){
+                    0 => snNotes[i];
+                }
+            }
+            2 => snareFillFlag;
+        }
+        else if(snareFillFlag == 2){
+            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0] @=> snNotes;
+            changeDrums(0);
+            3 => snareFillFlag;
+        }
+
+        // take out later
+        changeDrums(0);
+    }
+}
+
+spork ~ melodyRecieve();
+spork ~ drumRecieve();
 
 while(true){
     beat16();
