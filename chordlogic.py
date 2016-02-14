@@ -1,6 +1,14 @@
-import numpy as np
-from numpy.random import random as rand
+from random import random as rand
 from time import sleep
+
+def addLists(l1, l2):
+	return [a+b for (a,b) in zip(l1, l2)]
+
+def listDivideNumber(l, n):
+	return [a/float(n) for a in l]
+
+def NumberMinusList(n, l):
+	return [float(n) - a for a in l]
 
 class ChordType:
 	# Major or Minor
@@ -98,24 +106,24 @@ class Chord:
 
 		moods = [chord.mood for chord in chords]
 
-		func_values = np.array([chord.hFunc[next_func] for chord in chords], dtype=float)
+		func_values = [chord.hFunc[next_func] for chord in chords]
 
-		tension_scores = np.array([abs(curr_tension - t) for t in tensions], dtype=float)
-		mood_scores = np.array([abs(curr_mood - m) for m in moods], dtype=float)
+		tension_scores = [abs(curr_tension - t) for t in tensions]
+		mood_scores = [abs(curr_mood - m) for m in moods]
 
 		# Compute normalized scores, the larger the better
-		tension_scores = (1 - tension_scores) 
-		tension_scores /= np.sum(tension_scores)
+		tension_scores = NumberMinusList(1, tension_scores)
+		tension_scores = listDivideNumber(tension_scores ,sum(tension_scores))
 		print "Tension score: ", tension_scores
 
-		mood_scores = 1 - mood_scores
-		mood_scores /= np.sum(mood_scores)
+		mood_scores = NumberMinusList(1, mood_scores)
+		mood_scores = listDivideNumber(tension_scores, sum(mood_scores))
 		print "mood score: ", mood_scores
 
-		func_values /= np.sum(func_values)
+		func_values = listDivideNumber(func_values, sum(func_values))
 
-		final_scores = tension_scores + mood_scores + func_values
-		final_scores /= np.sum(final_scores)
+		final_scores = addLists(addLists(tension_scores, mood_scores), func_values)
+		final_scores = listDivideNumber(final_scores, sum(final_scores))
 		print "Final score: ", final_scores
 
 		r = rand()
@@ -174,3 +182,9 @@ class ChordMain:
 
 	def setMood(self, m):
 		self.current_mood = m
+
+c = ChordMain()
+while True:
+	print c.getNextPackedChord()
+	print c.current_chord
+	sleep(0.5)
