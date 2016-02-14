@@ -2,6 +2,7 @@
 (60000 / (4 * bpm))::ms => dur time16;
 0 => int beat;
 0 => int meas;
+60 => int key;
 
 0.5 => dac.gain;
 
@@ -13,15 +14,19 @@
 0 => int snareFillFlag;
 
 OscRecv recv;
-6449 => recv.port;
+9433 => recv.port;
 recv.listen();
-recv.event("/note/length/distance", "i i i") @=> OscEvent @ mele;
+recv.event("/collision", "i f f f f f f f") @=> OscEvent @ mele;
 recv.event("/drum", "i") @=> OscEvent @ drume;
+recv.event("/chord", "i i i i i i") @=> OscEvent @ chorde;
  
 256 => int queueSize;
 0 => int queueStart;
 0 => int queueEnd;
 int queue[3][queueSize];
+0 => int chordQueueStart;
+0 => int chordQueueEnd;
+int chordQueue[6][queueSize];
 
 TriOsc t[4];
 for(0 => int i; i < 4; i++){
@@ -34,8 +39,11 @@ fun void melodyRecieve(){
         mele => now;
         while(mele.nextMsg()){
             mele.getInt() => queue[0][queueEnd];
-            mele.getInt() => queue[1][queueEnd];
-            mele.getInt() => queue[2][queueEnd];
+            mele.getFloat() $ int => queue[1][queueEnd];
+            mele.getFloat() $ int => queue[2][queueEnd];
+            for(3 => int i; i < 8; i++){
+                mele.getFloat();
+            }
             (queueEnd + 1) % queueSize => queueEnd;
         }
     }
@@ -46,6 +54,18 @@ fun void drumRecieve(){
         drume => now;
         while(drume.nextMsg()){
             changeDrums(drume.getInt());
+        }
+    }
+}
+
+fun void chordRecieve(){
+    while(true){
+        chorde => now;
+        while(chorde.nextMsg()){
+            for(0 => int i; i < 6; i++){
+                chorde.getInt() => chordQueue[i][chordQueueEnd];
+            }
+            (chordQueueEnd + 1) % queueSize => chordQueueEnd;
         }
     }
 }
@@ -95,7 +115,8 @@ fun void cymb(){
 
 fun void melody(int note, int vel){
     SinOsc s => dac;
-    note => s.freq;
+    [0, 2, 4, 5, 7, 9, 11] @=> int major[];
+    Std.mtof(key + major[note % 7]) => s.freq;
     for(0 => int i; i < 100; i++){
         (100 - i) $ float / 100 => s.gain;
         2::ms => now;
@@ -177,7 +198,7 @@ fun void beat16(){
         }
     }
     if(beat % 2 == 0){
-        12::ms => now;
+        10::ms => now;
     }
     beat++;
     if(beat == 16){
