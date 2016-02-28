@@ -28,6 +28,9 @@ def run():
 def col(addr, tags, data, source):
 	print "got collision"
 	print data
+	if data[4]>15:
+		chordmachine.current_tension = data[5] / 255.0
+		chordmachine.current_mood = 1.0 - (data[6]+data[7]) / (2*255.0)
 
 def request(addr, tags, data, source):
 	sendOSCMsg("/chord", chordmachine.getNextPackedChord())
