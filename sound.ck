@@ -18,8 +18,14 @@ OscRecv recv;
 recv.listen();
 recv.event("/collision", "i f f f f f f f") @=> OscEvent @ mele;
 recv.event("/drum", "i") @=> OscEvent @ drume;
-recv.event("/chord", "i i i i i i") @=> OscEvent @ chorde;
- 
+
+OscRecv recv2;
+9434 => recv2.port;
+recv2.event("/chord", "i i i i i i") @=> OscEvent @ chorde;
+
+Osc xmit;
+xmit.setHost("localhost", 9435);
+
 256 => int queueSize;
 0 => int queueStart;
 0 => int queueEnd;
@@ -28,8 +34,8 @@ int queue[3][queueSize];
 0 => int chordQueueEnd;
 int chordQueue[6][queueSize];
 
-TriOsc t[4];
-for(0 => int i; i < 4; i++){
+TriOsc t[7];
+for(0 => int i; i < 7; i++){
     t[i] => dac;
     0.4 => t[i].gain;
 }
@@ -66,6 +72,8 @@ fun void chordRecieve(){
                 chorde.getInt() => chordQueue[i][chordQueueEnd];
             }
             (chordQueueEnd + 1) % queueSize => chordQueueEnd;
+            xmit.startMsg("/queuelen", "i");
+            (chordQueueEnd - chordQueueStart) % queueSize => xmit.addInt;
         }
     }
 }
@@ -124,23 +132,12 @@ fun void melody(int note, int vel){
 }
 
 fun void changeChords(){
-    if(meas % 4 == 1){
-        Std.mtof(53) => t[0].freq;
-        Std.mtof(60) => t[1].freq;
-        Std.mtof(65) => t[2].freq;
-        Std.mtof(72) => t[3].freq; 
-    }
-    else if(meas % 4 == 2){
-        Std.mtof(55) => t[0].freq;
-        Std.mtof(62) => t[1].freq;
-        Std.mtof(67) => t[2].freq;
-        Std.mtof(74) => t[3].freq;
-    }
-    else{
-        Std.mtof(57) => t[0].freq;
-        Std.mtof(64) => t[1].freq;
-        Std.mtof(69) => t[2].freq;
-        Std.mtof(76) => t[3].freq;
+    if(chordQueueStart != chordQueueEnd){
+        chordQueue[0][chordQueueStart] => t[6].freq;
+        for(0 => int i; i < 6; i++){
+            chordQueue[i][chordQueueStart] => t[i].freq;
+        }
+        chordQueueStart = (chordQueueStart + 1) % queueLength;
     }
 }
 
