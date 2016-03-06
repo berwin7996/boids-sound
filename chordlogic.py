@@ -251,7 +251,7 @@ class ChordMain:
 		self.current_mood = m
 
 
-chordmachine = ChordMain()
-while True:
-	print chordmachine.getNextPackedChord()
-	sleep(0.5)
+# chordmachine = ChordMain()
+# while True:
+# 	print chordmachine.getNextPackedChord()
+# 	sleep(0.5)
