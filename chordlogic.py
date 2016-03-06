@@ -62,7 +62,7 @@ class Chord:
 		return self
 
 	def getNotes(self, key):
-		return [(key+self.root+i)%12 for i in ChordType.getNotes(self.type)]
+		return ChordType.getNotes(self.type)
 
 	def setHarmonicFunction(self, ton=1, dom=0, pred=0, subd=0):
 		self.hFunc = [ton, dom, pred, subd]
@@ -96,7 +96,7 @@ class Chord:
 				print "Choose directly: ", n
 				return n, func_out # directly choose the common chord
 
-		if curr_chord.unstable or rand() < 0.5: # if chord is unstable, we always move on
+		if curr_chord.unstable==2 or (curr_chord.unstable==1 and rand()<0.5) or rand() < 0.5: # if chord is unstable, we always move on
 			if (curr_func == ChordType.Predominant):
 				if (rand() < 0.2):
 					print "Move to subdominant"
@@ -164,19 +164,19 @@ class Chord:
 		return s
 
 
-I = Chord().init(0, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(1,0,0,0).setMood(1.0).setBasicTension(0.1).setUnstable(False)
-ii = Chord().init(2, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0,0,1,0).setMood(0.4).setBasicTension(0.5).setUnstable(False)
-iii = Chord().init(4, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0.5,0.5,0,0).setMood(0.4).setBasicTension(0.5).setUnstable(False)
-III = Chord().init(4, [ChordType.Major, ChordType.Major7]).setHarmonicFunction(0,1,0,0).setMood(0.5).setBasicTension(0.6).setUnstable(False)
-III7 = Chord().init(4, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(0.2,0.8,0.0).setMood(0.5).setBasicTension(0.7).setUnstable(True)
-IV = Chord().init(5, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(0,0,1,0).setMood(0.6).setBasicTension(0.3).setUnstable(False)
-iv_ = Chord().init(5, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0,0,0,1).setMood(0.5).setBasicTension(0.9).setUnstable(True)
-V = Chord().init(7, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(0,1,0,0).setMood(0.8).setBasicTension(0.4).setUnstable(False)
-V7 = Chord().init(7, [ChordType.Major, ChordType.Major7]).setHarmonicFunction(0,1,0,0).setMood(0.7).setBasicTension(0.5).setUnstable(True)
-vi = Chord().init(9, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0.8,0,0.3,0).setMood(0.1).setBasicTension(0.2).setUnstable(False)
+I = Chord().init(0, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(1,0,0,0).setMood(1.0).setBasicTension(0.1).setUnstable(0)
+ii = Chord().init(2, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0,0,1,0).setMood(0.4).setBasicTension(0.5).setUnstable(1)
+iii = Chord().init(4, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0.5,0.5,0,0).setMood(0.4).setBasicTension(0.5).setUnstable(1)
+III = Chord().init(4, [ChordType.Major, ChordType.Major7]).setHarmonicFunction(0,1,0,0).setMood(0.5).setBasicTension(0.6).setUnstable(1)
+III7 = Chord().init(4, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(0.2,0.8,0.0).setMood(0.5).setBasicTension(0.7).setUnstable(2)
+IV = Chord().init(5, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(0,0,1,0).setMood(0.6).setBasicTension(0.3).setUnstable(0)
+iv_ = Chord().init(5, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0,0,0,1).setMood(0.5).setBasicTension(0.9).setUnstable(2)
+V = Chord().init(7, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(0,1,0,0).setMood(0.8).setBasicTension(0.4).setUnstable(1)
+V7 = Chord().init(7, [ChordType.Major, ChordType.Major7]).setHarmonicFunction(0,1,0,0).setMood(0.7).setBasicTension(0.5).setUnstable(2)
+vi = Chord().init(9, [ChordType.Minor, ChordType.Normal]).setHarmonicFunction(0.8,0,0.3,0).setMood(0.1).setBasicTension(0.2).setUnstable(0)
 
-VIsus4 = Chord().init(9, [ChordType.Sus4, ChordType.Normal]).setHarmonicFunction(0,0,0,0).setMood(0.3).setBasicTension(0.8).setUnstable(True)
-VI = Chord().init(9, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(1,0,0,0).setMood(0.9).setBasicTension(0.2).setUnstable(False)
+VIsus4 = Chord().init(9, [ChordType.Sus4, ChordType.Normal]).setHarmonicFunction(0,0,0,0).setMood(0.3).setBasicTension(0.8).setUnstable(2)
+VI = Chord().init(9, [ChordType.Major, ChordType.Normal]).setHarmonicFunction(1,0,0,0).setMood(0.9).setBasicTension(0.2).setUnstable(2)
 
 
 
@@ -234,7 +234,7 @@ class ChordMain:
 
 		# return the decision
 		print "Final decision: ", self.current_chord, "| Key: ", self.key
-		return [self.key] + self.current_chord.getNotes(self.key) + [0]
+		return [self.key] + self.current_chord.getNotes(self.key) + [self.current_chord.unstable]
 
 	def startModulation(self, modulation):
 		self.modulation = modulation

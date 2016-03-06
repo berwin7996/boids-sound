@@ -4,6 +4,7 @@
 0 => int meas;
 60 => int key;
 0 => int lastId;
+0 => int chordPullFlag;
 
 0.15 => dac.gain;
 
@@ -21,12 +22,12 @@ recv.event("/collision", "i f f f f f f f") @=> OscEvent @ mele;
 recv.event("/drum", "i") @=> OscEvent @ drume;
 
 OscRecv recv2;
-9436 => recv2.port;
+9438 => recv2.port;
 recv2.listen();
 recv2.event("/chord", "i i i i i i") @=> OscEvent @ chorde;
 
 OscSend xmit;
-xmit.setHost("127.0.0.1", 9435);
+xmit.setHost("127.0.0.1", 9437);
 
 16 => int queueSize;
 0 => int queueStart;
@@ -54,9 +55,10 @@ fun void melodyRecieve(){
             mele.getInt() => int id;
             if(id != lastId){
                 id => queue[0][queueEnd];
-                mele.getFloat() $ int => queue[1][queueEnd];
+                mele.getFloat();
                 mele.getFloat() $ int => queue[2][queueEnd];
-                for(3 => int i; i < 8; i++){
+                mele.getFloat() $ int => queue[1][queueEnd];
+                for(4 => int i; i < 8; i++){
                     mele.getFloat();
                 }
                 (queueEnd + 1) % queueSize => queueEnd;
@@ -108,11 +110,11 @@ fun void bd(float vel){
     TriOsc k => dac;
     vel * 1.5 => k.gain;
     bass.freq() + Math.random2f(-0.2, 0.2) => float bassFreq;
-    if(bassFreq > 80){
+    if(bassFreq > 78){
         bassFreq / 2 => bassFreq;
     }
     for(0 => int i; i < 40; i++){
-        50 * Math.exp(-0.1 * i) + bassFreq => k.freq;
+        50 * Math.exp(-0.07 * i) + bassFreq => k.freq;
         (40 - i) $ float / 20 * vel => k.gain;
         5::ms => now;
     }
@@ -139,14 +141,22 @@ fun void cymb(){
     0 => n.gain;
 }
 
-fun void melody(int note, int vel, int timbre){
+fun void melody(int note, int oct, int timbre){
     TriOsc s => LPF sfilt => JCRev srev => Pan2 span => dac;
     Math.random2f(-0.6, 0.6) => span.pan;
     0.1 => srev.mix;
     timbre * 3 + 300 => sfilt.freq;
     5 => sfilt.Q;
-    [-1, 0, 2, 4, 5, 7, 9, 11, 12, 14, 16] @=> int major[];
-    Math.random2f(-1.0, 1.0) + Std.mtof(key + major[note % 11]) => s.freq;
+    if(chordPullFlag == 0 || (chordPullFlag == 1 && Math.randomf() > 0.93)){
+        [-1, 0, 2, 4, 5, 7, 9, 11, 12, 14, 16] @=> int major[];
+        Math.random2f(-1.0, 1.0) + Std.mtof(key + major[note % 11]) => s.freq;
+    }
+    else{
+        Math.random2f(-0.5, 0.5) + t[note % 4].freq() * Math.random2(1, 2) => s.freq;
+    }
+    if(oct > 250){
+        s.freq() / 2 => s.freq;
+    }
     for(0 => int i; i < 100; i++){
         (100 - i) $ float / 120 => s.gain;
         2::ms => now;
@@ -156,11 +166,12 @@ fun void melody(int note, int vel, int timbre){
 
 fun void changeChords(){
     if(chordQueueStart != chordQueueEnd){
-        60 + chordQueue[0][chordQueueStart] => key;
+        53 +3 +3 + chordQueue[0][chordQueueStart] => key;
         Std.mtof(chordQueue[1][chordQueueStart] + key) / 4 => bass.freq;
         for(1 => int i; i < 5; i++){
             Math.random2f(-1.0, 1.0) + Std.mtof(chordQueue[i][chordQueueStart] + key) => t[i - 1].freq;
         }
+        chordQueue[5][chordQueueStart] => chordPullFlag;
         (chordQueueStart + 1) % queueSize => chordQueueStart;
     }
     if((chordQueueEnd - chordQueueStart) % queueSize < 8){
@@ -189,12 +200,12 @@ fun void changeDrums(int param){
          [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
          [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0],
          [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0],
-         [1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1],
+         [1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
          [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0],
          [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0],
          [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1],
          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] @=> int bdPats[][];
-        Math.random2(0, 8) => int bdPatNum;
+        Math.random2(4, 8) => int bdPatNum;
         for(0 => int i; i < 16; i++){
             bdPats[bdPatNum][i] => bdNotes[i];
         }
@@ -216,11 +227,16 @@ fun void beat16(){
     spork ~ bd(bdNotes[beat]);
     spork ~ sn(snNotes[beat]);
     if(beat == 0){
-        changeChords();
+        if(Math.randomf() > 0.1){
+            changeChords();
+        }
         if(snareFillFlag == 3){
             0 => snareFillFlag;
             spork ~ cymb();
         }
+    }
+    if(beat == 8 && Math.randomf() > 0.85){
+        changeChords();
     }
     if(beat % 2 == 0){
         10::ms => now;
@@ -259,12 +275,12 @@ spork ~ chordRecieve();
 while(true){
     beat16();
     if(queueStart != queueEnd){
-        spork ~ melody(queue[0][queueStart], 1, queue[1][queueStart]);
+        spork ~ melody(queue[0][queueStart], queue[2][queueStart], queue[1][queueStart]);
         (queueStart + 1) % queueSize => queueStart;
         time16 => now;
         beat16();
         if(queueStart != queueEnd){
-            spork ~ melody(queue[0][queueStart], 1, queue[1][queueStart]);
+            spork ~ melody(queue[0][queueStart], queue[2][queueStart], queue[1][queueStart]);
             (queueStart + 1) % queueSize => queueStart;
         }
     }
