@@ -62,7 +62,7 @@ class Chord:
 		return self
 
 	def getNotes(self, key):
-		return [(key+self.root+i)%12 for i in ChordType.getNotes(self.type)]
+		return ChordType.getNotes(self.type)
 
 	def setHarmonicFunction(self, ton=1, dom=0, pred=0, subd=0):
 		self.hFunc = [ton, dom, pred, subd]
@@ -247,7 +247,7 @@ class ChordMain:
 		self.current_mood = m
 
 
-# chordmachine = ChordMain()
-# while True:
-# 	print chordmachine.getNextPackedChord()
-# 	sleep(0.5)
+chordmachine = ChordMain()
+while True:
+	print chordmachine.getNextPackedChord()
+	sleep(0.5)
