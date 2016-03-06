@@ -3,8 +3,9 @@
 0 => int beat;
 0 => int meas;
 60 => int key;
+0 => int lastId;
 
-0.5 => dac.gain;
+0.15 => dac.gain;
 
 [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] @=> float hatNotes[];
 [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0] @=> float bdNotes[];
@@ -20,13 +21,14 @@ recv.event("/collision", "i f f f f f f f") @=> OscEvent @ mele;
 recv.event("/drum", "i") @=> OscEvent @ drume;
 
 OscRecv recv2;
-9434 => recv2.port;
+9436 => recv2.port;
+recv2.listen();
 recv2.event("/chord", "i i i i i i") @=> OscEvent @ chorde;
 
-Osc xmit;
-xmit.setHost("localhost", 9435);
+OscSend xmit;
+xmit.setHost("127.0.0.1", 9435);
 
-256 => int queueSize;
+16 => int queueSize;
 0 => int queueStart;
 0 => int queueEnd;
 int queue[3][queueSize];
@@ -34,23 +36,37 @@ int queue[3][queueSize];
 0 => int chordQueueEnd;
 int chordQueue[6][queueSize];
 
-TriOsc t[7];
-for(0 => int i; i < 7; i++){
-    t[i] => dac;
-    0.4 => t[i].gain;
+SinOsc bass => dac;
+0.9 => bass.gain;
+
+TriOsc t[4];
+Pan2 tpan[4];
+for(0 => int i; i < 4; i++){
+    t[i] => tpan[i] => dac;
+    0.35 => t[i].gain;
+    -1.0 + (2.0 * i / 3.0) => tpan[i].pan;
 }
 
 fun void melodyRecieve(){
     while(true){
         mele => now;
         while(mele.nextMsg()){
-            mele.getInt() => queue[0][queueEnd];
-            mele.getFloat() $ int => queue[1][queueEnd];
-            mele.getFloat() $ int => queue[2][queueEnd];
-            for(3 => int i; i < 8; i++){
-                mele.getFloat();
+            mele.getInt() => int id;
+            if(id != lastId){
+                id => queue[0][queueEnd];
+                mele.getFloat() $ int => queue[1][queueEnd];
+                mele.getFloat() $ int => queue[2][queueEnd];
+                for(3 => int i; i < 8; i++){
+                    mele.getFloat();
+                }
+                (queueEnd + 1) % queueSize => queueEnd;
             }
-            (queueEnd + 1) % queueSize => queueEnd;
+            else{
+                for(1 => int i; i < 8; i++){
+                    mele.getFloat();
+                }
+            }
+            id => lastId;
         }
     }
 }
@@ -72,8 +88,6 @@ fun void chordRecieve(){
                 chorde.getInt() => chordQueue[i][chordQueueEnd];
             }
             (chordQueueEnd + 1) % queueSize => chordQueueEnd;
-            xmit.startMsg("/queuelen", "i");
-            (chordQueueEnd - chordQueueStart) % queueSize => xmit.addInt;
         }
     }
 }
@@ -93,19 +107,23 @@ fun void hat(float vel){
 fun void bd(float vel){
     TriOsc k => dac;
     vel * 1.5 => k.gain;
+    bass.freq() + Math.random2f(-0.2, 0.2) => float bassFreq;
+    if(bassFreq > 80){
+        bassFreq / 2 => bassFreq;
+    }
     for(0 => int i; i < 40; i++){
-        50 * Math.exp(-0.1 * i) + 50 => k.freq;
-        (40 - i) $ float / 40 * vel * 1.5 => k.gain;
+        50 * Math.exp(-0.1 * i) + bassFreq => k.freq;
+        (40 - i) $ float / 20 * vel => k.gain;
         5::ms => now;
     }
 }
 
 fun void sn(float vel){
     Noise n => LPF f => dac;
-    2 => f.Q;
-    for(0 => int i; i < 60; i++){
-        1000 * Math.exp(-0.1 * i) + 3000 => f.freq;
-        (60 - i) $ float / 60 * vel => n.gain;
+    1.7 => f.Q;
+    for(0 => int i; i < 50; i++){
+        1200 * Math.exp(-0.1 * i) + 3400 => f.freq;
+        (50 - i) $ float / 90 * vel => n.gain;
         2::ms => now;
     }
 }
@@ -115,29 +133,39 @@ fun void cymb(){
     6000 => hi.freq;
     3 => hi.Q;
     for(0 => int i; i < 25; i++){
-        (25 - i) $ float / 25 => n.gain;
+        (25 - i) $ float / 40 => n.gain;
         20::ms => now;
     }
     0 => n.gain;
 }
 
-fun void melody(int note, int vel){
-    SinOsc s => dac;
-    [0, 2, 4, 5, 7, 9, 11] @=> int major[];
-    Std.mtof(key + major[note % 7]) => s.freq;
+fun void melody(int note, int vel, int timbre){
+    TriOsc s => LPF sfilt => JCRev srev => Pan2 span => dac;
+    Math.random2f(-0.6, 0.6) => span.pan;
+    0.1 => srev.mix;
+    timbre * 3 + 300 => sfilt.freq;
+    5 => sfilt.Q;
+    [-1, 0, 2, 4, 5, 7, 9, 11, 12, 14, 16] @=> int major[];
+    Math.random2f(-1.0, 1.0) + Std.mtof(key + major[note % 11]) => s.freq;
     for(0 => int i; i < 100; i++){
-        (100 - i) $ float / 100 => s.gain;
+        (100 - i) $ float / 120 => s.gain;
         2::ms => now;
     }
+    300::ms => now;
 }
 
 fun void changeChords(){
     if(chordQueueStart != chordQueueEnd){
-        chordQueue[0][chordQueueStart] => t[6].freq;
-        for(0 => int i; i < 6; i++){
-            chordQueue[i][chordQueueStart] => t[i].freq;
+        60 + chordQueue[0][chordQueueStart] => key;
+        Std.mtof(chordQueue[1][chordQueueStart] + key) / 4 => bass.freq;
+        for(1 => int i; i < 5; i++){
+            Math.random2f(-1.0, 1.0) + Std.mtof(chordQueue[i][chordQueueStart] + key) => t[i - 1].freq;
         }
-        chordQueueStart = (chordQueueStart + 1) % queueLength;
+        (chordQueueStart + 1) % queueSize => chordQueueStart;
+    }
+    if((chordQueueEnd - chordQueueStart) % queueSize < 8){
+        xmit.startMsg("/request", "i");
+        0 => xmit.addInt; 
     }
 }
 
@@ -226,16 +254,17 @@ fun void beat16(){
 
 spork ~ melodyRecieve();
 spork ~ drumRecieve();
+spork ~ chordRecieve();
 
 while(true){
     beat16();
     if(queueStart != queueEnd){
-        spork ~ melody(queue[0][queueStart], queue[1][queueStart]);
+        spork ~ melody(queue[0][queueStart], 1, queue[1][queueStart]);
         (queueStart + 1) % queueSize => queueStart;
         time16 => now;
         beat16();
         if(queueStart != queueEnd){
-            spork ~ melody(queue[0][queueStart], queue[1][queueStart]);
+            spork ~ melody(queue[0][queueStart], 1, queue[1][queueStart]);
             (queueStart + 1) % queueSize => queueStart;
         }
     }
