@@ -4,8 +4,8 @@ from chordlogic import ChordMain
 
 ip = "127.0.0.1"
 server_boids_port = 9434
-server_sound_port = 9435
-client_port = 9436
+server_sound_port = 9437
+client_port = 9438
 
 chordmachine = ChordMain()
 
